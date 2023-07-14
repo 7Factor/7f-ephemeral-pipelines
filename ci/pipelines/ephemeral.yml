@@ -47,7 +47,8 @@ jobs:
     serial_groups: [terraform]
     plan:
       - get: web-terraform
-        trigger: true
+        # Note: We don't use a trigger here.
+        # The ephemeral pipeline should probably do nothing initially without manual intervention.
       - put: terraformer
         params:
           plan_only: true
