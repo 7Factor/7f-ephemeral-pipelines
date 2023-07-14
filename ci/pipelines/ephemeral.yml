@@ -91,3 +91,39 @@ jobs:
           terraformer: terraformer
         params:
           DEPLOY_TO_ACCOUNT: ((aws.dev-account-id))
+
+  - name: destroy-plan
+    serial_groups: [terraform]
+    plan:
+      - get: web-terraform
+      - put: terraformer
+        get_params:
+          action: destroy
+        params:
+          plan_only: true
+          action: destroy
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+            ephemeral_env_name: ((ephemeral-env-name))
+
+  - name: destroy
+    serial_groups: [terraform, deploy]
+    plan:
+      - in_parallel:
+          - get: web-terraform
+            passed: [destroy-plan]
+          - get: terraformer
+            passed: [destroy-plan]
+      - put: terraformer
+        get_params:
+          action: destroy
+        params:
+          plan_run: true
+          action: destroy
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+            ephemeral_env_name: ((ephemeral-env-name))
