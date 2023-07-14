@@ -1,0 +1,30 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: mikesir87/aws-cli
+    tag: 1.16.145
+
+inputs:
+  - name: web-src
+  - name: terraformer
+
+run:
+  path: sh
+  args:
+    - -exc
+    - |
+
+      set +x
+
+      temp_role=$(aws sts assume-role \
+                          --role-arn "arn:aws:iam::$DEPLOY_TO_ACCOUNT:role/7FContinuousDelivery" \
+                          --role-session-name "7FContinuousDelivery")
+
+      export AWS_ACCESS_KEY_ID=$(echo $temp_role | jq .Credentials.AccessKeyId | xargs)
+      export AWS_SECRET_ACCESS_KEY=$(echo $temp_role | jq .Credentials.SecretAccessKey | xargs)
+      export AWS_SESSION_TOKEN=$(echo $temp_role | jq .Credentials.SessionToken | xargs)
+
+      aws s3 sync web-src/src/ s3://$(echo $(cat terraformer/metadata) | jq --raw-output .s3_bucket_name)

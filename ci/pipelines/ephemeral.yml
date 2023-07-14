@@ -1,0 +1,91 @@
+---
+resource_types:
+  - name: terraform
+    type: docker-image
+    source:
+      repository: ljfranklin/terraform-resource
+
+
+resources:
+  - name: web-src
+    type: git
+    source:
+      paths:
+        - src/**
+        - env/**
+      # Uses the branch name passed in from the main pipeline.
+      branch: ((branch))
+      uri: ((git-repositories.7f-ephemeral-pipelines-uri))
+      private_key: ((git-repositories.7f-ephemeral-pipelines-key))
+
+  - name: web-terraform
+    type: git
+    source:
+      paths:
+        - ci/terraform/**
+      branch: main
+      uri: ((git-repositories.7f-ephemeral-pipelines-uri))
+      private_key: ((git-repositories.7f-ephemeral-pipelines-key))
+
+  - name: terraformer
+    type: terraform
+    source:
+      backend_type: s3
+      backend_config:
+        bucket: ((aws.dev-terraform-bucket))
+        key: ((aws-region))/terraform.tfstate
+        region: ((aws-region))
+      # The difference here vs. main pipeline makes sure the ephemeral pipeline has its own tfstate file.
+      env_name: ephemeral-environments-((ephemeral-env-name))
+      env:
+        AWS_DEFAULT_REGION: ((aws-region))
+
+
+jobs:
+  - name: terraform-plan
+    serial_groups: [terraform]
+    plan:
+      - get: web-terraform
+        trigger: true
+      - put: terraformer
+        params:
+          plan_only: true
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+            # Additional variable to make sure created resources have unique names and such.
+            ephemeral_env_name: ((ephemeral-env-name))
+
+  - name: terraform
+    serial_groups: [terraform, deploy]
+    plan:
+      - in_parallel:
+          - get: web-terraform
+            passed: [terraform-plan]
+          - get: terraformer
+            passed: [terraform-plan]
+      - put: terraformer
+        params:
+          plan_run: true
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+            # Additional variable to make sure created resources have unique names and such.
+            ephemeral_env_name: ((ephemeral-env-name))
+
+  - name: deploy
+    serial_groups: [deploy]
+    plan:
+      - in_parallel:
+          - get: terraformer
+            passed: [ terraform ]
+          - get: web-src
+            trigger: true
+      - task: s3-deploy
+        file: web-src/ci/tasks/s3-deploy.yml
+        input_mapping:
+          terraformer: terraformer
+        params:
+          DEPLOY_TO_ACCOUNT: ((aws.dev-account-id))
