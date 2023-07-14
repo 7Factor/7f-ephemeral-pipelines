@@ -23,7 +23,8 @@ resources:
     source:
       paths:
         - ci/terraform/**
-      branch: main
+      # Uses the branch name passed in from the main pipeline.
+      branch: ((branch))
       uri: ((git-repositories.7f-ephemeral-pipelines-uri))
       private_key: ((git-repositories.7f-ephemeral-pipelines-key))
 
