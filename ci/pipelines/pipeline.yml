@@ -1,0 +1,190 @@
+---
+resource_types:
+
+  ######################
+  ## Pipeline Tracker ##
+  ######################
+
+  - name: git-branches
+    type: docker-image
+    source:
+      repository: aoldershaw/git-branches-resource
+
+  #############
+  ## Website ##
+  #############
+
+  - name: terraform
+    type: docker-image
+    source:
+      repository: ljfranklin/terraform-resource
+
+
+resources:
+
+  ######################
+  ## Pipeline Tracker ##
+  ######################
+
+  - name: ephemeral-branches
+    type: git-branches
+    source:
+      uri: ((git-repositories.7f-ephemeral-pipelines-uri))
+      private_key: ((git-repositories.7f-ephemeral-pipelines-key))
+      # This regex will match any branch that contains /ephemeral/ in the name. Additionally, the following segment of
+      # the branch name will be used as the branch name for the ephemeral pipeline.
+      branch_regex: .*?/ephemeral/(?P<branch>.+?)/?.*
+
+  #############
+  ## Website ##
+  #############
+
+  - name: web-src
+    type: git
+    source:
+      paths:
+        - src/**
+        - env/**
+      branch: main
+      uri: ((git-repositories.7f-ephemeral-pipelines-uri))
+      private_key: ((git-repositories.7f-ephemeral-pipelines-key))
+
+  - name: web-terraform
+    type: git
+    source:
+      paths:
+        - ci/terraform/**
+      branch: main
+      uri: ((git-repositories.7f-ephemeral-pipelines-uri))
+      private_key: ((git-repositories.7f-ephemeral-pipelines-key))
+
+  - name: terraformer
+    type: terraform
+    source:
+      backend_type: s3
+      backend_config:
+        bucket: ((aws.dev-terraform-bucket))
+        key: ((aws-region))/terraform.tfstate
+        region: ((aws-region))
+      env_name: ephemeral-environments
+      env:
+        AWS_DEFAULT_REGION: ((aws-region))
+
+
+groups:
+  - name: deployment
+    jobs:
+      - terraform-plan
+      - terraform
+      - deploy
+      - destroy-plan
+      - destroy
+  - name: pipeline-tracker
+    jobs:
+      - update-branch-pipelines
+
+
+jobs:
+
+  ######################
+  ## Pipeline Tracker ##
+  ######################
+
+  - name: update-branch-pipelines
+    plan:
+      - get: release-branches
+        trigger: true
+      - load_var: branches
+        file: release-branches/branches.json
+      - across:
+          - var: branch
+            values: ((.:branches))
+        set_pipeline: ephemeral-pipelines
+        file: ci/pipelines/ephemeral.yml
+        instance_vars:
+          ephemeral-env-name: ((.:branch.groups.branch))
+        vars:
+          branch: ((.:branch))
+          aws-region: ((aws-region))
+
+  #############
+  ## Website ##
+  #############
+
+  - name: terraform-plan
+    serial_groups: [terraform]
+    plan:
+      - get: web-terraform
+        trigger: true
+      - put: terraformer
+        params:
+          plan_only: true
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+
+  - name: terraform
+    serial_groups: [terraform, deploy]
+    plan:
+      - in_parallel:
+          - get: web-terraform
+            passed: [terraform-plan]
+          - get: terraformer
+            passed: [terraform-plan]
+      - put: terraformer
+        params:
+          plan_run: true
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+
+  - name: deploy
+    serial_groups: [deploy]
+    plan:
+      - in_parallel:
+          - get: terraformer
+            passed: [ terraform ]
+          - get: web-src
+            trigger: true
+      - task: s3-deploy
+        file: web-src/ci/tasks/s3-deploy.yml
+        input_mapping:
+          terraformer: terraformer
+        params:
+          DEPLOY_TO_ACCOUNT: ((aws.dev-account-id))
+
+  - name: destroy-plan
+    serial_groups: [terraform]
+    plan:
+      - get: web-terraform
+      - put: terraformer
+        get_params:
+          action: destroy
+        params:
+          plan_only: true
+          action: destroy
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
+
+  - name: destroy
+    serial_groups: [terraform, deploy]
+    plan:
+      - in_parallel:
+          - get: web-terraform
+            passed: [destroy-plan]
+          - get: terraformer
+            passed: [destroy-plan]
+      - put: terraformer
+        get_params:
+          action: destroy
+        params:
+          plan_run: true
+          action: destroy
+          terraform_source: web-terraform/ci/terraform
+          vars:
+            deploy_to_account: ((aws.dev-account-id))
+            cert_arn: ((ephemeral-pipelines/web-cert.arn))
