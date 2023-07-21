@@ -45,6 +45,7 @@ resources:
       paths:
         - src/**
         - env/**
+        - ci/tasks/**
       branch: main
       uri: ((git-repositories.7f-ephemeral-pipelines-uri))
       private_key: ((git-repositories.7f-ephemeral-pipelines-key))
