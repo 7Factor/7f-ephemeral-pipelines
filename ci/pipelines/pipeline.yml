@@ -33,7 +33,7 @@ resources:
       private_key: ((git-repositories.7f-ephemeral-pipelines-key))
       # This regex will match any branch that contains /ephemeral/ in the name. Additionally, the following segment of
       # the branch name will be used as the branch name for the ephemeral pipeline.
-      branch_regex: .*?/ephemeral/(?P<branch>.+?)/?.*
+      branch_regex: .*?/ephemeral/(?P<branch>.+)/?.*
 
   #############
   ## Website ##
