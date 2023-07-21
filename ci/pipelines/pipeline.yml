@@ -92,10 +92,10 @@ jobs:
 
   - name: update-branch-pipelines
     plan:
-      - get: release-branches
+      - get: ephemeral-branches
         trigger: true
       - load_var: branches
-        file: release-branches/branches.json
+        file: ephemeral-branches/branches.json
       - across:
           - var: branch
             values: ((.:branches))
