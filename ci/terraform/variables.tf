@@ -15,3 +15,8 @@ variable "cert_arn" {
   nullable  = false
   sensitive = true
 }
+
+variable "allow_destroy_s3" {
+  type    = bool
+  default = false
+}
