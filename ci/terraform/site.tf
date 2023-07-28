@@ -34,6 +34,8 @@ module "s3-website" {
     },
   ]
 
+  allow_destroy_s3 = true
+
   default_cache_behavior = module.default_cache_behavior
   ordered_cache_behaviors = [module.root_path_cache_behavior]
 }

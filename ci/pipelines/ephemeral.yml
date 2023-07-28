@@ -54,6 +54,8 @@ jobs:
         params:
           plan_only: true
           terraform_source: web-terraform/ci/terraform
+          var_files:
+            - web-terraform/ci/terraform/env/ephemeral.yml
           vars:
             deploy_to_account: ((aws.dev-account-id))
             cert_arn: ((ephemeral-pipelines/web-cert.arn))
@@ -72,6 +74,8 @@ jobs:
         params:
           plan_run: true
           terraform_source: web-terraform/ci/terraform
+          var_files:
+            - web-terraform/ci/terraform/env/ephemeral.yml
           vars:
             deploy_to_account: ((aws.dev-account-id))
             cert_arn: ((ephemeral-pipelines/web-cert.arn))
@@ -104,6 +108,8 @@ jobs:
           plan_only: true
           action: destroy
           terraform_source: web-terraform/ci/terraform
+          var_files:
+            - web-terraform/ci/terraform/env/ephemeral.yml
           vars:
             deploy_to_account: ((aws.dev-account-id))
             cert_arn: ((ephemeral-pipelines/web-cert.arn))
@@ -124,6 +130,8 @@ jobs:
           plan_run: true
           action: destroy
           terraform_source: web-terraform/ci/terraform
+          var_files:
+            - web-terraform/ci/terraform/env/ephemeral.yml
           vars:
             deploy_to_account: ((aws.dev-account-id))
             cert_arn: ((ephemeral-pipelines/web-cert.arn))
