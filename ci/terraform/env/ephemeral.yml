@@ -1,1 +1,1 @@
-allow_s3_destroy: true
+allow_destroy_s3: true
